@@ -76,7 +76,9 @@ mkdir -p "$REPORT_DIR"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 REPORT_FILE="$REPORT_DIR/security-report_$TIMESTAMP.txt"
 
-ISSUES_FOUND=0
+CRITICAL_COUNT=0
+WARNING_COUNT=0
+REVIEW_COUNT=0
 
 cd "$REPO_DIR" || exit 1
 
@@ -143,26 +145,43 @@ check_security() {
         output "$severity $message"
         output "$(echo "$matches" | head -10)"
         output ""
-        ISSUES_FOUND=$((ISSUES_FOUND + 1))
+        # Count by severity
+        case $severity in
+            *CRITICAL*) CRITICAL_COUNT=$((CRITICAL_COUNT + 1)) ;;
+            *WARNING*) WARNING_COUNT=$((WARNING_COUNT + 1)) ;;
+            *REVIEW*) REVIEW_COUNT=$((REVIEW_COUNT + 1)) ;;
+        esac
     fi
 }
 
 output "Checking for security vulnerabilities in NEW code..."
 output ""
 
+# ============================================
+# PHP SECURITY CHECKS
+# ============================================
+
 # SQL Injection checks
-output "── SQL Injection ──"
+output "── SQL Injection (PHP) ──"
 check_security '\$wpdb->query.*\$_' "⚠️  Direct query with user input (use \$wpdb->prepare())" "🔴 CRITICAL:"
+check_security '\$wpdb->get_.*\$_' "⚠️  Database query with user input - use \$wpdb->prepare()" "🔴 CRITICAL:"
 check_security '\$wpdb->get_' "⚠️  Database query - verify \$wpdb->prepare() is used" "🟡 WARNING:"
 check_security 'esc_sql' "⚠️  esc_sql found - prefer \$wpdb->prepare()" "🟡 WARNING:"
+check_security 'query.*SELECT.*FROM.*\$' "⚠️  Raw SQL with variable - potential injection" "🔴 CRITICAL:"
+check_security 'query.*INSERT.*INTO.*\$' "⚠️  Raw SQL INSERT with variable - potential injection" "🔴 CRITICAL:"
+check_security 'query.*UPDATE.*SET.*\$' "⚠️  Raw SQL UPDATE with variable - potential injection" "🔴 CRITICAL:"
+check_security 'query.*DELETE.*FROM.*\$' "⚠️  Raw SQL DELETE with variable - potential injection" "🔴 CRITICAL:"
 
 # XSS checks
 output "── Cross-Site Scripting (XSS) ──"
 check_security 'echo.*\$_\(GET\|POST\|REQUEST\)' "⚠️  Echoing user input without escaping" "🔴 CRITICAL:"
 check_security 'print.*\$_\(GET\|POST\|REQUEST\)' "⚠️  Printing user input without escaping" "🔴 CRITICAL:"
+check_security '<?=.*\$_' "⚠️  Short echo tag with user input - XSS risk" "🔴 CRITICAL:"
 check_security '<?=.*\$' "⚠️  Short echo tag with variable - ensure proper escaping" "🟡 WARNING:"
+check_security 'printf.*\$_' "⚠️  printf with user input - potential XSS" "🔴 CRITICAL:"
+check_security 'vprintf.*\$_' "⚠️  vprintf with user input - potential XSS" "🔴 CRITICAL:"
 
-# Check for missing escape functions in output
+# Output Escaping
 output "── Output Escaping ──"
 check_security 'echo.*\$' "ℹ️  Echo with variable - verify esc_html/esc_attr is used" "🟡 REVIEW:"
 
@@ -170,52 +189,188 @@ check_security 'echo.*\$' "ℹ️  Echo with variable - verify esc_html/esc_attr
 output "── CSRF Protection ──"
 check_security 'admin_post_' "ℹ️  Admin POST handler - verify wp_nonce check exists" "🟡 REVIEW:"
 check_security 'wp_ajax_' "ℹ️  AJAX handler - verify wp_nonce check exists" "🟡 REVIEW:"
-check_security '\$_POST\[' "ℹ️  POST data usage - verify nonce verification" "🟡 REVIEW:"
+check_security 'admin_init.*\$_POST' "⚠️  admin_init with POST - verify nonce & capability check" "🟡 WARNING:"
+check_security 'init.*\$_POST\[' "⚠️  init hook with POST data - verify nonce check" "🟡 WARNING:"
 
-# Dangerous functions
-output "── Dangerous Functions ──"
-check_security 'eval\s*(' "⚠️  eval() usage detected - HIGH RISK" "🔴 CRITICAL:"
-# PHP exec() - dangerous
-check_security '[^.]exec\s*(' "⚠️  PHP exec() usage detected - HIGH RISK" "🔴 CRITICAL:"
-# JS child_process exec - dangerous
-check_security 'child_process' "⚠️  child_process module - potential command execution" "🔴 CRITICAL:"
-check_security 'require.*child_process\|from.*child_process' "⚠️  child_process import detected - HIGH RISK" "🔴 CRITICAL:"
-check_security 'execSync\|spawnSync' "⚠️  Synchronous command execution detected" "🔴 CRITICAL:"
-check_security 'system\s*(' "⚠️  system() usage detected - HIGH RISK" "🔴 CRITICAL:"
-check_security 'shell_exec' "⚠️  shell_exec() usage detected - HIGH RISK" "🔴 CRITICAL:"
-check_security 'passthru' "⚠️  passthru() usage detected - HIGH RISK" "🔴 CRITICAL:"
-check_security 'popen\s*(' "⚠️  popen() usage detected - HIGH RISK" "🔴 CRITICAL:"
-check_security 'proc_open' "⚠️  proc_open() usage detected - HIGH RISK" "🔴 CRITICAL:"
-check_security 'unserialize' "⚠️  unserialize() - use maybe_unserialize() or validate input" "🔴 CRITICAL:"
-check_security 'base64_decode' "⚠️  base64_decode() - verify source is trusted" "🟡 WARNING:"
-# JS specific dangerous functions
-check_security 'new Function\s*(' "⚠️  new Function() - similar to eval, HIGH RISK" "🔴 CRITICAL:"
-check_security 'setTimeout.*\$\|setInterval.*\$' "⚠️  setTimeout/setInterval with string - potential code execution" "🟡 WARNING:"
+# Dangerous PHP functions
+output "── Dangerous PHP Functions ──"
+check_security 'eval\s*(' "⚠️  eval() - HIGH RISK, allows arbitrary code execution" "🔴 CRITICAL:"
+check_security 'assert\s*(' "⚠️  assert() - can execute code if string passed" "🔴 CRITICAL:"
+check_security 'create_function' "⚠️  create_function() - deprecated, use closures instead" "🔴 CRITICAL:"
+check_security 'preg_replace.*\/.*e' "⚠️  preg_replace with /e modifier - code execution risk" "🔴 CRITICAL:"
+check_security 'call_user_func.*\$_' "⚠️  call_user_func with user input - arbitrary function call" "🔴 CRITICAL:"
+check_security 'call_user_func_array.*\$_' "⚠️  call_user_func_array with user input" "🔴 CRITICAL:"
+check_security '[^.]exec\s*(' "⚠️  exec() - command execution" "🔴 CRITICAL:"
+check_security 'system\s*(' "⚠️  system() - command execution" "🔴 CRITICAL:"
+check_security 'shell_exec' "⚠️  shell_exec() - command execution" "🔴 CRITICAL:"
+check_security 'passthru' "⚠️  passthru() - command execution" "🔴 CRITICAL:"
+check_security 'popen\s*(' "⚠️  popen() - process execution" "🔴 CRITICAL:"
+check_security 'proc_open' "⚠️  proc_open() - process execution" "🔴 CRITICAL:"
+check_security 'pcntl_exec' "⚠️  pcntl_exec() - process execution" "🔴 CRITICAL:"
+check_security 'backtick\|\`.*\$' "⚠️  Backtick operator with variable - command execution" "🔴 CRITICAL:"
+
+# Serialization
+output "── Serialization Issues ──"
+check_security 'unserialize.*\$_' "⚠️  unserialize with user input - object injection risk" "🔴 CRITICAL:"
+check_security 'unserialize' "⚠️  unserialize() - use maybe_unserialize() or validate" "🟡 WARNING:"
+check_security 'maybe_unserialize.*\$_' "⚠️  maybe_unserialize with user input - verify source" "🟡 WARNING:"
 
 # File operations
 output "── File Operations ──"
+check_security 'file_get_contents.*\$_' "⚠️  file_get_contents with user input - SSRF/LFI risk" "🔴 CRITICAL:"
 check_security 'file_get_contents.*\$' "⚠️  file_get_contents with variable - verify path" "🟡 WARNING:"
-check_security 'file_put_contents' "⚠️  file_put_contents - verify write permissions & path" "🟡 WARNING:"
-check_security 'fopen.*\$' "⚠️  fopen with variable - verify path is safe" "🟡 WARNING:"
-check_security 'include.*\$' "⚠️  Dynamic include - potential LFI vulnerability" "🔴 CRITICAL:"
-check_security 'require.*\$' "⚠️  Dynamic require - potential LFI vulnerability" "🔴 CRITICAL:"
-check_security 'move_uploaded_file' "⚠️  File upload handling - verify proper validation" "🟡 WARNING:"
+check_security 'file_put_contents.*\$_' "⚠️  file_put_contents with user input - arbitrary write" "🔴 CRITICAL:"
+check_security 'file_put_contents' "⚠️  file_put_contents - verify path & permissions" "🟡 WARNING:"
+check_security 'fopen.*\$_' "⚠️  fopen with user input - path traversal risk" "🔴 CRITICAL:"
+check_security 'fwrite.*\$_' "⚠️  fwrite with user input - arbitrary file write" "🔴 CRITICAL:"
+check_security 'readfile.*\$_' "⚠️  readfile with user input - LFI risk" "🔴 CRITICAL:"
+check_security 'include.*\$_' "⚠️  include with user input - LFI vulnerability" "🔴 CRITICAL:"
+check_security 'include_once.*\$_' "⚠️  include_once with user input - LFI vulnerability" "🔴 CRITICAL:"
+check_security 'require.*\$_' "⚠️  require with user input - LFI vulnerability" "🔴 CRITICAL:"
+check_security 'require_once.*\$_' "⚠️  require_once with user input - LFI vulnerability" "🔴 CRITICAL:"
+check_security 'include.*\$' "⚠️  Dynamic include - verify path is safe" "🟡 WARNING:"
+check_security 'require.*\$' "⚠️  Dynamic require - verify path is safe" "🟡 WARNING:"
+check_security 'move_uploaded_file' "⚠️  File upload - verify type, size & destination" "🟡 WARNING:"
+check_security 'copy.*\$_' "⚠️  copy with user input - arbitrary file operations" "🔴 CRITICAL:"
+check_security 'rename.*\$_' "⚠️  rename with user input - file manipulation risk" "🔴 CRITICAL:"
+check_security 'unlink.*\$_' "⚠️  unlink with user input - arbitrary file deletion" "🔴 CRITICAL:"
+check_security 'rmdir.*\$_' "⚠️  rmdir with user input - directory deletion risk" "🔴 CRITICAL:"
+check_security 'mkdir.*\$_' "⚠️  mkdir with user input - verify path" "🟡 WARNING:"
+check_security 'chmod.*\$_' "⚠️  chmod with user input - permission manipulation" "🔴 CRITICAL:"
+
+# Variable manipulation
+output "── Variable Manipulation ──"
+check_security 'extract\s*(' "⚠️  extract() - can overwrite variables, avoid with user data" "🔴 CRITICAL:"
+check_security 'parse_str.*\$_' "⚠️  parse_str with user input - variable injection" "🔴 CRITICAL:"
+check_security 'parse_str' "⚠️  parse_str() - use second parameter to avoid variable injection" "🟡 WARNING:"
+check_security '\$\$' "⚠️  Variable variables (\$\$) - verify source is trusted" "🟡 WARNING:"
+check_security 'compact.*\$_' "⚠️  compact with user input - variable exposure risk" "🟡 WARNING:"
+
+# Encoding/Decoding
+output "── Encoding/Decoding ──"
+check_security 'base64_decode.*\$_' "⚠️  base64_decode with user input - potential code injection" "🔴 CRITICAL:"
+check_security 'base64_decode' "⚠️  base64_decode() - verify source is trusted" "🟡 WARNING:"
+check_security 'gzinflate\|gzuncompress\|gzdecode' "⚠️  Compression functions - often used to hide malicious code" "🟡 WARNING:"
+check_security 'str_rot13' "⚠️  str_rot13 - sometimes used to obfuscate malicious code" "🟡 WARNING:"
 
 # Input sanitization
-output "── Input Sanitization ──"
+output "── Input Sources ──"
 check_security '\$_GET\[' "ℹ️  \$_GET usage - verify sanitize_text_field/intval" "🟡 REVIEW:"
 check_security '\$_POST\[' "ℹ️  \$_POST usage - verify sanitization" "🟡 REVIEW:"
 check_security '\$_REQUEST\[' "ℹ️  \$_REQUEST usage - verify sanitization" "🟡 REVIEW:"
 check_security '\$_COOKIE\[' "ℹ️  \$_COOKIE usage - verify sanitization" "🟡 REVIEW:"
-check_security '\$_SERVER\[' "ℹ️  \$_SERVER usage - some values need sanitization" "🟡 REVIEW:"
+check_security '\$_SERVER\[.REQUEST_URI' "⚠️  \$_SERVER[REQUEST_URI] - needs escaping for output" "🟡 WARNING:"
+check_security '\$_SERVER\[.PHP_SELF' "⚠️  \$_SERVER[PHP_SELF] - XSS risk, use esc_url()" "🟡 WARNING:"
+check_security '\$_SERVER\[.HTTP_' "⚠️  \$_SERVER[HTTP_*] - user-controlled headers, sanitize" "🟡 WARNING:"
+check_security '\$_FILES\[' "ℹ️  \$_FILES usage - verify proper upload validation" "🟡 REVIEW:"
+check_security 'php://input' "⚠️  php://input - raw input stream, validate carefully" "🟡 WARNING:"
 
-# WordPress specific checks
-output "── WordPress Best Practices ──"
-check_security 'ABSPATH' "✅ ABSPATH check found (good practice)" "🟢 INFO:"
-check_security 'current_user_can' "✅ Capability check found (good practice)" "🟢 INFO:"
-check_security 'wp_verify_nonce' "✅ Nonce verification found (good practice)" "🟢 INFO:"
-check_security 'sanitize_' "✅ Sanitization function found (good practice)" "🟢 INFO:"
-check_security 'esc_html\|esc_attr\|esc_url\|wp_kses' "✅ Escaping function found (good practice)" "🟢 INFO:"
+# Information disclosure
+output "── Information Disclosure ──"
+check_security 'phpinfo\s*(' "⚠️  phpinfo() - exposes server information" "🔴 CRITICAL:"
+check_security 'var_dump.*\$_' "⚠️  var_dump with user data - debug output" "🟡 WARNING:"
+check_security 'print_r.*\$_' "⚠️  print_r with user data - debug output" "🟡 WARNING:"
+check_security 'debug_backtrace' "⚠️  debug_backtrace - may expose sensitive info" "🟡 WARNING:"
+check_security 'error_reporting.*-1\|E_ALL' "⚠️  Full error reporting - disable in production" "🟡 WARNING:"
+check_security 'display_errors.*on\|1' "⚠️  display_errors on - disable in production" "🟡 WARNING:"
+check_security 'WP_DEBUG.*true' "⚠️  WP_DEBUG true - should be false in production" "🟡 WARNING:"
+
+# ============================================
+# JAVASCRIPT SECURITY CHECKS
+# ============================================
+output ""
+output "── JavaScript Security ──"
+
+# DOM-based XSS
+check_security 'innerHTML.*=' "⚠️  innerHTML assignment - potential XSS, use textContent" "🟡 WARNING:"
+check_security 'outerHTML.*=' "⚠️  outerHTML assignment - potential XSS" "🟡 WARNING:"
+check_security 'document\.write' "⚠️  document.write - XSS risk, avoid using" "🔴 CRITICAL:"
+check_security 'document\.writeln' "⚠️  document.writeln - XSS risk, avoid using" "🔴 CRITICAL:"
+check_security '\.html\s*(' "⚠️  jQuery .html() - potential XSS, verify input" "🟡 WARNING:"
+check_security 'dangerouslySetInnerHTML' "⚠️  React dangerouslySetInnerHTML - sanitize input" "🟡 WARNING:"
+check_security 'v-html' "⚠️  Vue v-html directive - potential XSS" "🟡 WARNING:"
+check_security '\[innerHTML\]' "⚠️  Angular innerHTML binding - potential XSS" "🟡 WARNING:"
+
+# Dangerous JS functions
+check_security 'eval\s*(' "⚠️  JavaScript eval() - arbitrary code execution" "🔴 CRITICAL:"
+check_security 'new Function\s*(' "⚠️  new Function() - similar to eval" "🔴 CRITICAL:"
+check_security 'setTimeout\s*\(\s*["'\']' "⚠️  setTimeout with string - use function instead" "🟡 WARNING:"
+check_security 'setInterval\s*\(\s*["'\']' "⚠️  setInterval with string - use function instead" "🟡 WARNING:"
+
+# Node.js specific
+check_security 'child_process' "⚠️  child_process module - command execution risk" "🔴 CRITICAL:"
+check_security 'require.*child_process\|from.*child_process' "⚠️  child_process import" "🔴 CRITICAL:"
+check_security 'execSync\|spawnSync' "⚠️  Sync command execution" "🔴 CRITICAL:"
+check_security 'require\s*\(.*\+\|require\s*\(.*\$' "⚠️  Dynamic require - potential code injection" "🔴 CRITICAL:"
+
+# Prototype pollution
+check_security '__proto__' "⚠️  __proto__ access - prototype pollution risk" "🔴 CRITICAL:"
+check_security 'constructor\[.prototype' "⚠️  constructor.prototype access - prototype pollution" "🔴 CRITICAL:"
+check_security 'Object\.assign.*req\.' "⚠️  Object.assign with request data - prototype pollution" "🟡 WARNING:"
+
+# URL handling
+check_security 'location\.href.*=' "⚠️  location.href assignment - open redirect risk" "🟡 WARNING:"
+check_security 'location\.replace' "⚠️  location.replace - open redirect risk" "🟡 WARNING:"
+check_security 'window\.open.*\$\|window\.open.*\+' "⚠️  window.open with variable - verify URL" "🟡 WARNING:"
+
+# ============================================
+# WORDPRESS SPECIFIC CHECKS
+# ============================================
+output ""
+output "── WordPress Security ──"
+
+# Dangerous WordPress functions
+check_security 'wp_remote_get.*\$_\|wp_remote_post.*\$_' "⚠️  Remote request with user input - SSRF risk" "🔴 CRITICAL:"
+check_security 'wp_safe_remote' "✅ Using wp_safe_remote (good practice)" "🟢 INFO:"
+check_security 'update_option.*\$_' "⚠️  update_option with user input - verify capability" "🔴 CRITICAL:"
+check_security 'delete_option.*\$_' "⚠️  delete_option with user input - verify capability" "🔴 CRITICAL:"
+check_security 'add_option.*\$_' "⚠️  add_option with user input - verify capability" "🟡 WARNING:"
+check_security 'update_user_meta.*\$_' "⚠️  update_user_meta with user input - verify permissions" "🟡 WARNING:"
+check_security 'update_post_meta.*\$_' "⚠️  update_post_meta with user input - verify permissions" "🟡 WARNING:"
+check_security 'wp_insert_post.*\$_' "⚠️  wp_insert_post with user input - verify sanitization" "🟡 WARNING:"
+check_security 'wp_update_post.*\$_' "⚠️  wp_update_post with user input - verify sanitization" "🟡 WARNING:"
+check_security 'wp_delete_post.*\$_' "⚠️  wp_delete_post with user input - verify capability" "🔴 CRITICAL:"
+check_security 'switch_to_blog.*\$_' "⚠️  switch_to_blog with user input - multisite risk" "🔴 CRITICAL:"
+check_security 'wpdb->query.*\$_' "⚠️  Direct wpdb query with user input" "🔴 CRITICAL:"
+check_security 'add_query_arg.*echo\|print.*add_query_arg' "⚠️  add_query_arg output - wrap with esc_url()" "🟡 WARNING:"
+
+# Authentication/Authorization
+output ""
+output "── Authentication & Authorization ──"
+check_security 'is_admin\s*(' "⚠️  is_admin() - doesn't check user capability, use current_user_can()" "🟡 WARNING:"
+check_security 'wp_set_auth_cookie' "⚠️  wp_set_auth_cookie - verify proper authentication flow" "🟡 WARNING:"
+check_security 'wp_create_user.*\$_' "⚠️  wp_create_user with user input - registration security" "🟡 WARNING:"
+check_security 'wp_insert_user.*\$_' "⚠️  wp_insert_user with user input - verify validation" "🟡 WARNING:"
+check_security 'wp_update_user.*\$_' "⚠️  wp_update_user with user input - verify permissions" "🟡 WARNING:"
+check_security 'add_user_to_blog.*\$_' "⚠️  add_user_to_blog with user input - multisite security" "🟡 WARNING:"
+check_security 'set_role.*\$_' "⚠️  set_role with user input - privilege escalation risk" "🔴 CRITICAL:"
+check_security 'add_cap.*\$_\|remove_cap.*\$_' "⚠️  Capability modification with user input" "🔴 CRITICAL:"
+
+# Hardcoded secrets
+output ""
+output "── Hardcoded Secrets ──"
+check_security 'password.*=.*["'\'][^"'\']\{6,\}' "⚠️  Possible hardcoded password" "🔴 CRITICAL:"
+check_security 'api_key.*=.*["'\'][^"'\']\{10,\}' "⚠️  Possible hardcoded API key" "🔴 CRITICAL:"
+check_security 'secret.*=.*["'\'][^"'\']\{10,\}' "⚠️  Possible hardcoded secret" "🔴 CRITICAL:"
+check_security 'api_secret\|apiSecret\|API_SECRET' "⚠️  API secret reference - ensure not hardcoded" "🟡 WARNING:"
+check_security 'private_key\|privateKey\|PRIVATE_KEY' "⚠️  Private key reference - ensure secure storage" "🟡 WARNING:"
+check_security 'Authorization.*Bearer.*[A-Za-z0-9]' "⚠️  Possible hardcoded bearer token" "🔴 CRITICAL:"
+
+# ============================================
+# GOOD PRACTICES (Positive indicators)
+# ============================================
+output ""
+output "── ✅ Good Security Practices Found ──"
+check_security 'defined.*ABSPATH\|ABSPATH.*defined' "✅ ABSPATH check (prevents direct access)" "🟢 INFO:"
+check_security 'current_user_can' "✅ Capability check found" "🟢 INFO:"
+check_security 'wp_verify_nonce\|check_admin_referer\|check_ajax_referer' "✅ Nonce verification found" "🟢 INFO:"
+check_security 'wp_nonce_field\|wp_create_nonce' "✅ Nonce creation found" "🟢 INFO:"
+check_security 'sanitize_text_field\|sanitize_email\|sanitize_title' "✅ Input sanitization found" "🟢 INFO:"
+check_security 'absint\|intval' "✅ Integer sanitization found" "🟢 INFO:"
+check_security 'esc_html\|esc_attr\|esc_url\|esc_js' "✅ Output escaping found" "🟢 INFO:"
+check_security 'wp_kses\|wp_kses_post' "✅ HTML sanitization found" "🟢 INFO:"
+check_security '\$wpdb->prepare' "✅ Prepared statements found" "🟢 INFO:"
+check_security 'wp_safe_redirect\|wp_redirect.*exit' "✅ Safe redirect pattern found" "🟢 INFO:"
 
 output ""
 output "=========================================="
@@ -225,17 +380,33 @@ output "Files changed: $(git diff --name-only "$BASE_BRANCH"..."$CURRENT_BRANCH"
 output "Lines added:   $(git diff "$BASE_BRANCH"..."$CURRENT_BRANCH" -- "$PLUGIN_PATH" | grep -c '^+' || echo 0)"
 output "Lines removed: $(git diff "$BASE_BRANCH"..."$CURRENT_BRANCH" -- "$PLUGIN_PATH" | grep -c '^-' || echo 0)"
 output "------------------------------------------"
-if [ $ISSUES_FOUND -eq 0 ]; then
+output "🔴 Critical issues:  $CRITICAL_COUNT"
+output "🟡 Warnings:         $WARNING_COUNT"
+output "🔵 Items to review:  $REVIEW_COUNT"
+output "------------------------------------------"
+TOTAL_ISSUES=$((CRITICAL_COUNT + WARNING_COUNT))
+if [ $TOTAL_ISSUES -eq 0 ]; then
     output "✅ No obvious security issues detected!"
+elif [ $CRITICAL_COUNT -gt 0 ]; then
+    output "🚨 ATTENTION: $CRITICAL_COUNT critical issue(s) require immediate review!"
 else
-    output "⚠️  Found $ISSUES_FOUND potential issue(s) to review"
+    output "⚠️  Found $WARNING_COUNT warning(s) to review"
 fi
 output "=========================================="
 output ""
 output "Note: This is an automated check. Manual code review is still recommended."
-output "Legend: 🔴 CRITICAL | 🟡 WARNING/REVIEW | 🟢 GOOD PRACTICE"
+output "False positives may occur. Always verify findings in context."
+output ""
+output "Legend:"
+output "  🔴 CRITICAL - High risk, requires immediate attention"
+output "  🟡 WARNING  - Medium risk, should be reviewed"
+output "  🔵 REVIEW   - Low risk, verify proper implementation"
+output "  🟢 INFO     - Good security practice detected"
 output ""
 output "Report saved to: $REPORT_FILE"
 
 echo ""
+echo "=========================================="
+echo "📊 Results: 🔴 $CRITICAL_COUNT critical | 🟡 $WARNING_COUNT warnings | 🔵 $REVIEW_COUNT review"
+echo "=========================================="
 echo "📄 Report saved to: $REPORT_FILE"
