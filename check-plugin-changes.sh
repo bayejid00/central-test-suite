@@ -97,7 +97,7 @@ ESCAPED_EXCLUDES=$(printf '%s|' "${EXCLUDE_DIRS[@]}" | sed 's/\./\\./g' | sed 's
 GREP_EXCLUDES="(^|/)(${ESCAPED_EXCLUDES})(/|$)"
 
 # Pattern to exclude minified css/js files
-MINIFIED_PATTERN='\\.min\\.(css|js)$'
+MINIFIED_PATTERN='\.min\.(css|js)$'
 
 cd "$REPO_DIR" || exit 1
 
@@ -164,7 +164,9 @@ output "🛡️  SECURITY ANALYSIS"
 output "=========================================="
 output ""
 
-# Function to check for pattern and report
+# Function to check for security patterns in new code
+# Args: pattern (regex), message (description), severity (emoji prefix)
+# The function counts issues by severity for the summary report
 check_security() {
     local pattern="$1"
     local message="$2"
@@ -175,17 +177,32 @@ check_security() {
         output "$severity $message"
         output "$(echo "$matches" | head -10)"
         output ""
-        # Count by severity
+        # Count by severity for final summary
         case $severity in
             *CRITICAL*) CRITICAL_COUNT=$((CRITICAL_COUNT + 1)) ;;
-            *WARNING*) WARNING_COUNT=$((WARNING_COUNT + 1)) ;;
-            *REVIEW*) REVIEW_COUNT=$((REVIEW_COUNT + 1)) ;;
+            *WARNING*)  WARNING_COUNT=$((WARNING_COUNT + 1)) ;;
+            *REVIEW*)   REVIEW_COUNT=$((REVIEW_COUNT + 1)) ;;
         esac
     fi
 }
 
 output "Checking for security vulnerabilities in NEW code..."
 output ""
+
+# ============================================
+# SECURITY CHECK CATEGORIES
+# ============================================
+# This script performs automated security analysis across multiple categories:
+# 1. PHP Security (SQL Injection, XSS, Dangerous Functions)
+# 2. Input Validation & Sanitization
+# 3. CSRF & Nonce Verification
+# 4. File & Serialization Issues
+# 5. JavaScript Security (DOM-XSS, Prototype Pollution)
+# 6. WordPress Specific (Options, Posts, Users, Capabilities)
+# 7. Hardcoded Secrets Detection
+# 8. Positive Security Patterns (Good practices found)
+#
+# Note: High false-positive rate - manual review recommended
 
 # ============================================
 # PHP SECURITY CHECKS
@@ -324,8 +341,8 @@ check_security '\[innerHTML\]' "⚠️  Angular innerHTML binding - potential XS
 # Dangerous JS functions
 check_security '\beval\s*(' "⚠️  JavaScript eval() - arbitrary code execution" "🔴 CRITICAL:"
 check_security '\bnew\s+Function\s*(' "⚠️  new Function() - similar to eval" "🔴 CRITICAL:"
-check_security 'setTimeout\s*\(\s*["'\']' "⚠️  setTimeout with string - use function instead" "🟡 WARNING:"
-check_security 'setInterval\s*\(\s*["'\']' "⚠️  setInterval with string - use function instead" "🟡 WARNING:"
+check_security "setTimeout\\s*\\(\\s*[\"']" "⚠️  setTimeout with string - use function instead" "🟡 WARNING:"
+check_security "setInterval\\s*\\(\\s*[\"']" "⚠️  setInterval with string - use function instead" "🟡 WARNING:"
 
 # Node.js specific
 check_security '\bchild_process' "⚠️  child_process module - command execution risk" "🔴 CRITICAL:"
@@ -379,9 +396,9 @@ check_security 'add_cap.*\$_\|remove_cap.*\$_' "⚠️  Capability modification 
 # Hardcoded secrets
 output ""
 output "── Hardcoded Secrets ──"
-check_security 'password.*=.*["'\'][^"'\']\{6,\}' "⚠️  Possible hardcoded password" "🔴 CRITICAL:"
-check_security 'api_key.*=.*["'\'][^"'\']\{10,\}' "⚠️  Possible hardcoded API key" "🔴 CRITICAL:"
-check_security 'secret.*=.*["'\'][^"'\']\{10,\}' "⚠️  Possible hardcoded secret" "🔴 CRITICAL:"
+check_security "password.*=.*[\"'].{6,}" "⚠️  Possible hardcoded password" "🔴 CRITICAL:"
+check_security "api_key.*=.*[\"'].{10,}" "⚠️  Possible hardcoded API key" "🔴 CRITICAL:"
+check_security "secret.*=.*[\"'].{10,}" "⚠️  Possible hardcoded secret" "🔴 CRITICAL:"
 check_security 'api_secret\|apiSecret\|API_SECRET' "⚠️  API secret reference - ensure not hardcoded" "🟡 WARNING:"
 check_security 'private_key\|privateKey\|PRIVATE_KEY' "⚠️  Private key reference - ensure secure storage" "🟡 WARNING:"
 check_security 'Authorization.*Bearer.*[A-Za-z0-9]' "⚠️  Possible hardcoded bearer token" "🔴 CRITICAL:"
