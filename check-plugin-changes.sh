@@ -72,13 +72,32 @@ PLUGIN_PATH=$(realpath --relative-to="$REPO_DIR" "$FULL_PLUGIN_PATH" 2>/dev/null
 REPORT_DIR="$SCRIPT_DIR/new-code-check/$PLUGIN_NAME"
 mkdir -p "$REPORT_DIR"
 
-# Report file with timestamp
-TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-REPORT_FILE="$REPORT_DIR/security-report_$TIMESTAMP.txt"
+# Report file (overwrites existing file)
+REPORT_FILE="$REPORT_DIR/security-report.txt"
 
 CRITICAL_COUNT=0
 WARNING_COUNT=0
 REVIEW_COUNT=0
+
+# Directories to exclude from analysis
+EXCLUDE_DIRS=(
+    "node_modules"
+    ".git"
+    ".github"
+    "vendor"
+    "tests"
+    "dist"
+    "build"
+    "security-reports"
+)
+
+# Build grep exclusion pattern matching directory boundaries, e.g. '(^|/)(node_modules|\.git|build)(/|$)'
+# Escape dots in directory names and join with |
+ESCAPED_EXCLUDES=$(printf '%s|' "${EXCLUDE_DIRS[@]}" | sed 's/\./\\./g' | sed 's/|$//')
+GREP_EXCLUDES="(^|/)(${ESCAPED_EXCLUDES})(/|$)"
+
+# Pattern to exclude minified css/js files
+MINIFIED_PATTERN='\\.min\\.(css|js)$'
 
 cd "$REPO_DIR" || exit 1
 
@@ -119,13 +138,24 @@ output "Date: $(date)"
 output "=========================================="
 output ""
 
-# Get only the added lines (new code) from the diff
-NEW_CODE=$(git diff "$BASE_BRANCH"..."$CURRENT_BRANCH" -- "$PLUGIN_PATH" | grep '^+' | grep -v '^+++')
+# Get list of changed files first, then filter out excluded directories and minified files
+ALL_CHANGED_FILES=$(git diff --name-only "$BASE_BRANCH"..."$CURRENT_BRANCH" -- "$PLUGIN_PATH" || true)
+FILTERED_FILES=$(echo "$ALL_CHANGED_FILES" | grep -vE "$GREP_EXCLUDES" | grep -vE "$MINIFIED_PATTERN" || true)
 
-# Show list of changed files
+# Get diff only for filtered files (properly excludes entire files from build folders)
+if [ -n "$FILTERED_FILES" ]; then
+    FILTERED_DIFF=$(echo "$FILTERED_FILES" | xargs git diff "$BASE_BRANCH"..."$CURRENT_BRANCH" -- 2>/dev/null || true)
+else
+    FILTERED_DIFF=""
+fi
+
+# Get only the added lines (new code) from the filtered diff
+NEW_CODE=$(echo "$FILTERED_DIFF" | grep '^+' | grep -v '^+++' || true)
+
+# Show list of changed files (excluding excluded directories)
 output "📁 Changed files:"
 output "------------------------------------------"
-CHANGED_FILES=$(git diff --name-status "$BASE_BRANCH"..."$CURRENT_BRANCH" -- "$PLUGIN_PATH")
+CHANGED_FILES=$(git diff --name-status "$BASE_BRANCH"..."$CURRENT_BRANCH" -- "$PLUGIN_PATH" | grep -vE "$GREP_EXCLUDES" | grep -vE "$MINIFIED_PATTERN" || true)
 output "$CHANGED_FILES"
 output ""
 
@@ -140,7 +170,7 @@ check_security() {
     local message="$2"
     local severity="$3"
     local matches
-    matches=$(echo "$NEW_CODE" | grep -n -i "$pattern" 2>/dev/null)
+    matches=$(echo "$NEW_CODE" | grep -E -n -i "$pattern" 2>/dev/null)
     if [ -n "$matches" ]; then
         output "$severity $message"
         output "$(echo "$matches" | head -10)"
@@ -194,25 +224,25 @@ check_security 'init.*\$_POST\[' "⚠️  init hook with POST data - verify nonc
 
 # Dangerous PHP functions
 output "── Dangerous PHP Functions ──"
-check_security 'eval\s*(' "⚠️  eval() - HIGH RISK, allows arbitrary code execution" "🔴 CRITICAL:"
-check_security 'assert\s*(' "⚠️  assert() - can execute code if string passed" "🔴 CRITICAL:"
-check_security 'create_function' "⚠️  create_function() - deprecated, use closures instead" "🔴 CRITICAL:"
+check_security '\beval\s*(' "⚠️  eval() - HIGH RISK, allows arbitrary code execution" "🔴 CRITICAL:"
+check_security '\bassert\s*(' "⚠️  assert() - can execute code if string passed" "🔴 CRITICAL:"
+check_security '\bcreate_function' "⚠️  create_function() - deprecated, use closures instead" "🔴 CRITICAL:"
 check_security 'preg_replace.*\/.*e' "⚠️  preg_replace with /e modifier - code execution risk" "🔴 CRITICAL:"
 check_security 'call_user_func.*\$_' "⚠️  call_user_func with user input - arbitrary function call" "🔴 CRITICAL:"
 check_security 'call_user_func_array.*\$_' "⚠️  call_user_func_array with user input" "🔴 CRITICAL:"
-check_security '[^.]exec\s*(' "⚠️  exec() - command execution" "🔴 CRITICAL:"
-check_security 'system\s*(' "⚠️  system() - command execution" "🔴 CRITICAL:"
-check_security 'shell_exec' "⚠️  shell_exec() - command execution" "🔴 CRITICAL:"
-check_security 'passthru' "⚠️  passthru() - command execution" "🔴 CRITICAL:"
-check_security 'popen\s*(' "⚠️  popen() - process execution" "🔴 CRITICAL:"
-check_security 'proc_open' "⚠️  proc_open() - process execution" "🔴 CRITICAL:"
-check_security 'pcntl_exec' "⚠️  pcntl_exec() - process execution" "🔴 CRITICAL:"
+check_security '[^.]\bexec\s*(' "⚠️  exec() - command execution" "🔴 CRITICAL:"
+check_security '\bsystem\s*(' "⚠️  system() - command execution" "🔴 CRITICAL:"
+check_security '\bshell_exec' "⚠️  shell_exec() - command execution" "🔴 CRITICAL:"
+check_security '\bpassthru' "⚠️  passthru() - command execution" "🔴 CRITICAL:"
+check_security '\bpopen\s*(' "⚠️  popen() - process execution" "🔴 CRITICAL:"
+check_security '\bproc_open' "⚠️  proc_open() - process execution" "🔴 CRITICAL:"
+check_security '\bpcntl_exec' "⚠️  pcntl_exec() - process execution" "🔴 CRITICAL:"
 check_security 'backtick\|\`.*\$' "⚠️  Backtick operator with variable - command execution" "🔴 CRITICAL:"
 
 # Serialization
 output "── Serialization Issues ──"
-check_security 'unserialize.*\$_' "⚠️  unserialize with user input - object injection risk" "🔴 CRITICAL:"
-check_security 'unserialize' "⚠️  unserialize() - use maybe_unserialize() or validate" "🟡 WARNING:"
+check_security 'unserialize\s*\(\s*\$_' "⚠️  unserialize with user input - object injection risk" "🔴 CRITICAL:"
+check_security 'unserialize\s*\(\s*\$\w*\[.POST\|GET\|REQUEST\' "⚠️  unserialize with user input - object injection risk" "🔴 CRITICAL:"
 check_security 'maybe_unserialize.*\$_' "⚠️  maybe_unserialize with user input - verify source" "🟡 WARNING:"
 
 # File operations
@@ -287,21 +317,21 @@ check_security 'outerHTML.*=' "⚠️  outerHTML assignment - potential XSS" "�
 check_security 'document\.write' "⚠️  document.write - XSS risk, avoid using" "🔴 CRITICAL:"
 check_security 'document\.writeln' "⚠️  document.writeln - XSS risk, avoid using" "🔴 CRITICAL:"
 check_security '\.html\s*(' "⚠️  jQuery .html() - potential XSS, verify input" "🟡 WARNING:"
-check_security 'dangerouslySetInnerHTML' "⚠️  React dangerouslySetInnerHTML - sanitize input" "🟡 WARNING:"
+check_security 'dangerouslySetInnerHTML.*\$\|dangerouslySetInnerHTML.*{.*\$' "⚠️  React dangerouslySetInnerHTML with variable - sanitize input" "🟡 WARNING:"
 check_security 'v-html' "⚠️  Vue v-html directive - potential XSS" "🟡 WARNING:"
 check_security '\[innerHTML\]' "⚠️  Angular innerHTML binding - potential XSS" "🟡 WARNING:"
 
 # Dangerous JS functions
-check_security 'eval\s*(' "⚠️  JavaScript eval() - arbitrary code execution" "🔴 CRITICAL:"
-check_security 'new Function\s*(' "⚠️  new Function() - similar to eval" "🔴 CRITICAL:"
+check_security '\beval\s*(' "⚠️  JavaScript eval() - arbitrary code execution" "🔴 CRITICAL:"
+check_security '\bnew\s+Function\s*(' "⚠️  new Function() - similar to eval" "🔴 CRITICAL:"
 check_security 'setTimeout\s*\(\s*["'\']' "⚠️  setTimeout with string - use function instead" "🟡 WARNING:"
 check_security 'setInterval\s*\(\s*["'\']' "⚠️  setInterval with string - use function instead" "🟡 WARNING:"
 
 # Node.js specific
-check_security 'child_process' "⚠️  child_process module - command execution risk" "🔴 CRITICAL:"
-check_security 'require.*child_process\|from.*child_process' "⚠️  child_process import" "🔴 CRITICAL:"
-check_security 'execSync\|spawnSync' "⚠️  Sync command execution" "🔴 CRITICAL:"
-check_security 'require\s*\(.*\+\|require\s*\(.*\$' "⚠️  Dynamic require - potential code injection" "🔴 CRITICAL:"
+check_security '\bchild_process' "⚠️  child_process module - command execution risk" "🔴 CRITICAL:"
+check_security '\brequire.*child_process\|from.*child_process' "⚠️  child_process import" "🔴 CRITICAL:"
+check_security '\bexecSync\|spawnSync' "⚠️  Sync command execution" "🔴 CRITICAL:"
+check_security '\brequire\s*\(.*\+\|require\s*\(.*\$' "⚠️  Dynamic require - potential code injection" "🔴 CRITICAL:"
 
 # Prototype pollution
 check_security '__proto__' "⚠️  __proto__ access - prototype pollution risk" "🔴 CRITICAL:"
@@ -321,7 +351,7 @@ output "── WordPress Security ──"
 
 # Dangerous WordPress functions
 check_security 'wp_remote_get.*\$_\|wp_remote_post.*\$_' "⚠️  Remote request with user input - SSRF risk" "🔴 CRITICAL:"
-check_security 'wp_safe_remote' "✅ Using wp_safe_remote (good practice)" "🟢 INFO:"
+check_security 'wp_safe_remote' "[GOOD] Using wp_safe_remote (good practice)" "🟢 INFO:"
 check_security 'update_option.*\$_' "⚠️  update_option with user input - verify capability" "🔴 CRITICAL:"
 check_security 'delete_option.*\$_' "⚠️  delete_option with user input - verify capability" "🔴 CRITICAL:"
 check_security 'add_option.*\$_' "⚠️  add_option with user input - verify capability" "🟡 WARNING:"
@@ -376,9 +406,9 @@ output ""
 output "=========================================="
 output "📊 SUMMARY"
 output "=========================================="
-output "Files changed: $(git diff --name-only "$BASE_BRANCH"..."$CURRENT_BRANCH" -- "$PLUGIN_PATH" | wc -l | tr -d ' ')"
-output "Lines added:   $(git diff "$BASE_BRANCH"..."$CURRENT_BRANCH" -- "$PLUGIN_PATH" | grep -c '^+' || echo 0)"
-output "Lines removed: $(git diff "$BASE_BRANCH"..."$CURRENT_BRANCH" -- "$PLUGIN_PATH" | grep -c '^-' || echo 0)"
+output "Files changed: $(echo "$CHANGED_FILES" | sed '/^\s*$/d' | wc -l | tr -d ' ')"
+output "Lines added:   $(echo "$FILTERED_DIFF" | grep -c '^+' || echo 0)"
+output "Lines removed: $(echo "$FILTERED_DIFF" | grep -c '^-' || echo 0)"
 output "------------------------------------------"
 output "🔴 Critical issues:  $CRITICAL_COUNT"
 output "🟡 Warnings:         $WARNING_COUNT"
