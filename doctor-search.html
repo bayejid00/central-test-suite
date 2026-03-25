@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Doctor Filter - Apolo Hospital</title>
+
+<style>
+body {
+    font-family: Arial, sans-serif;
+    background: #f4f7fa;
+    margin: 0;
+    padding: 0;
+}
+
+.wrapper {
+    max-width: 900px;
+    margin: 80px auto;
+    text-align: center;
+}
+
+.doctor-filter-inline {
+    font-size: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 20px;
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+}
+
+.filter-select {
+    border: none;
+    border-bottom: 2px solid #0073aa;
+    background: transparent;
+    font-size: 18px;
+    padding: 5px 8px;
+    outline: none;
+    cursor: pointer;
+    min-width: 140px;
+}
+
+.filter-select:focus {
+    border-color: #005177;
+}
+
+.filter-btn {
+    background: #0073aa;
+    color: #fff;
+    border: none;
+    padding: 8px 18px;
+    border-radius: 25px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: 0.3s ease;
+}
+
+.filter-btn:hover {
+    background: #005177;
+}
+
+.result-box {
+    margin-top: 30px;
+    font-size: 18px;
+    color: #333;
+}
+</style>
+</head>
+
+<body>
+
+<div class="wrapper">
+
+    <div class="doctor-filter-inline">
+        <span>Find the doctors at</span>
+
+        <select id="department" class="filter-select">
+            <option value="">Departments</option>
+            <option value="Cardiology">Cardiology</option>
+            <option value="Neurology">Neurology</option>
+            <option value="Orthopedics">Orthopedics</option>
+        </select>
+
+        <span>on</span>
+
+        <select id="designation" class="filter-select">
+            <option value="">Designation</option>
+            <option value="Consultant">Consultant</option>
+            <option value="Senior Consultant">Senior Consultant</option>
+            <option value="Professor">Professor</option>
+        </select>
+
+        <span>of</span>
+
+        <select id="branch" class="filter-select">
+            <option value="">Branch</option>
+            <option value="Dhaka">Dhaka</option>
+            <option value="Chittagong">Chittagong</option>
+            <option value="Sylhet">Sylhet</option>
+        </select>
+
+        <span>of Apolo Hospital</span>
+
+        <button class="filter-btn" onclick="showResult()">Search</button>
+    </div>
+
+    <div class="result-box" id="result"></div>
+
+</div>
+
+<script>
+function showResult() {
+    var department = document.getElementById('department').value;
+    var designation = document.getElementById('designation').value;
+    var branch = document.getElementById('branch').value;
+
+    if (!department || !designation || !branch) {
+        document.getElementById('result').innerHTML =
+            "Please select Department, Designation and Branch.";
+        return;
+    }
+
+    document.getElementById('result').innerHTML =
+        "Showing doctors from <strong>" + department +
+        "</strong> department, working as <strong>" + designation +
+        "</strong> at <strong>" + branch +
+        "</strong> branch of Apolo Hospital.";
+}
+</script>
+
+</body>
+</html>
