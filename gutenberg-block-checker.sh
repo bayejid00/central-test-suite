@@ -194,25 +194,31 @@ if [ -f "$PLUGIN_ROOT/node_modules/.bin/eslint" ]; then
         echo "---------------"
     } > "$REPORT_DIR/03-eslint.txt"
     
+    # Create temporary .eslintignore to ensure node_modules is excluded
+    ESLINT_IGNORE_FILE="$PLUGIN_ROOT/.eslintignore.tmp"
+    cat > "$ESLINT_IGNORE_FILE" <<'ESLINT_EOF'
+node_modules/**
+build/**
+dist/**
+vendor/**
+.git/**
+gutenberg-reports/**
+ESLINT_EOF
+    
     (cd "$PLUGIN_ROOT" && "$PLUGIN_ROOT/node_modules/.bin/eslint" . \
       --ext .js,.jsx,.ts,.tsx \
-      --ignore-path .gitignore \
-      --ignore-pattern 'build/' \
-      --ignore-pattern 'dist/' \
-      --ignore-pattern 'vendor/' \
-      --ignore-pattern 'node_modules/' \
+      --ignore-path "$ESLINT_IGNORE_FILE" \
       --format stylish) >> "$REPORT_DIR/03-eslint.txt" 2>&1 || true
     
     # Generate JSON report for detailed analysis
     (cd "$PLUGIN_ROOT" && "$PLUGIN_ROOT/node_modules/.bin/eslint" . \
       --ext .js,.jsx,.ts,.tsx \
-      --ignore-path .gitignore \
-      --ignore-pattern 'build/' \
-      --ignore-pattern 'dist/' \
-      --ignore-pattern 'vendor/' \
-      --ignore-pattern 'node_modules/' \
+      --ignore-path "$ESLINT_IGNORE_FILE" \
       --format json \
       --output-file "$REPORT_DIR/03-eslint-results.json") 2>&1 || true
+    
+    # Clean up temporary ignore file
+    rm -f "$ESLINT_IGNORE_FILE"
     
     ESLINT_ERRORS=$(jq '[.[].messages[] | select(.severity==2)] | length' "$REPORT_DIR/03-eslint-results.json" 2>/dev/null || echo "0")
     ESLINT_WARNINGS=$(jq '[.[].messages[] | select(.severity==1)] | length' "$REPORT_DIR/03-eslint-results.json" 2>/dev/null || echo "0")
@@ -248,22 +254,28 @@ if [ -f "$PLUGIN_ROOT/node_modules/.bin/stylelint" ]; then
         echo "-------"
     } > "$REPORT_DIR/04-stylelint.txt"
     
+    # Create temporary .stylelintignore to ensure node_modules is excluded
+    STYLELINT_IGNORE_FILE="$PLUGIN_ROOT/.stylelintignore.tmp"
+    cat > "$STYLELINT_IGNORE_FILE" <<'STYLELINT_EOF'
+node_modules/**
+build/**
+dist/**
+vendor/**
+.git/**
+gutenberg-reports/**
+STYLELINT_EOF
+    
     (cd "$PLUGIN_ROOT" && "$PLUGIN_ROOT/node_modules/.bin/stylelint" "**/*.{css,scss}" \
-      --ignore-path .gitignore \
-      --ignore-pattern 'build/' \
-      --ignore-pattern 'dist/' \
-      --ignore-pattern 'vendor/' \
-      --ignore-pattern 'node_modules/') >> "$REPORT_DIR/04-stylelint.txt" 2>&1 || true
+      --ignore-path "$STYLELINT_IGNORE_FILE") >> "$REPORT_DIR/04-stylelint.txt" 2>&1 || true
     
     # Generate JSON report
     (cd "$PLUGIN_ROOT" && "$PLUGIN_ROOT/node_modules/.bin/stylelint" "**/*.{css,scss}" \
-      --ignore-path .gitignore \
-      --ignore-pattern 'build/' \
-      --ignore-pattern 'dist/' \
-      --ignore-pattern 'vendor/' \
-      --ignore-pattern 'node_modules/' \
+      --ignore-path "$STYLELINT_IGNORE_FILE" \
       --formatter json \
       --output-file "$REPORT_DIR/04-stylelint-results.json") 2>&1 || true
+    
+    # Clean up temporary ignore file
+    rm -f "$STYLELINT_IGNORE_FILE"
     
     STYLELINT_ERRORS=$(jq '[.[] | select(.errored==true)] | length' "$REPORT_DIR/04-stylelint-results.json" 2>/dev/null || echo "0")
     STYLELINT_WARNINGS=$(jq '[.[].warnings[] | select(.severity=="warning")] | length' "$REPORT_DIR/04-stylelint-results.json" 2>/dev/null || echo "0")
