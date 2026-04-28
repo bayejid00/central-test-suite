@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bash -n /Users/th10/wp-projects/central-test-suite/plugin-security-analyzer.sh)"
+    ]
+  }
+}
