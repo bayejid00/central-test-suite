@@ -833,7 +833,7 @@ if ($issues === 0) {
 }
 PHP
 
-AJAX_NO_CAP=$(grep -c "^WARNING:" "$REPORT_DIR/17-ajax-missing-capability.txt" 2>/dev/null || echo "0")
+AJAX_NO_CAP=$(grep -c "^WARNING:" "$REPORT_DIR/17-ajax-missing-capability.txt" 2>/dev/null || true)
 if [ "$AJAX_NO_CAP" -gt 0 ]; then
     echo "   🔴 Found $AJAX_NO_CAP AJAX handlers missing capability checks"
 else
@@ -904,8 +904,8 @@ if ($issues === 0 && $open === 0) {
 }
 PHP
 
-REST_NO_PERM=$(grep -c "^WARNING:" "$REPORT_DIR/18-rest-missing-permission.txt" 2>/dev/null || echo "0")
-REST_OPEN=$(grep -c "^OPEN:" "$REPORT_DIR/18-rest-missing-permission.txt" 2>/dev/null || echo "0")
+REST_NO_PERM=$(grep -c "^WARNING:" "$REPORT_DIR/18-rest-missing-permission.txt" 2>/dev/null || true)
+REST_OPEN=$(grep -c "^OPEN:" "$REPORT_DIR/18-rest-missing-permission.txt" 2>/dev/null || true)
 if [ "$REST_NO_PERM" -gt 0 ]; then
     echo "   🔴 Found $REST_NO_PERM REST routes missing permission_callback"
 elif [ "$REST_OPEN" -gt 0 ]; then
