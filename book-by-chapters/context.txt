@@ -1,0 +1,79 @@
+translate this chapter in bengali language and save as chapter-01-bangla.txt
+
+keeping in your memory that where the the word 'God' or 'god' you find, use 'আল্লাহ' as translation of the word 'God' or 'god'
+
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Summary:
+1. Primary Request and Intent:
+   The user opened a book (a biography of Prophet Muhammad, by Martin Lings) split into 85 chapter files in `/Users/th10/wp-projects/central-test-suite/book-by-chapters/`. The user requested:
+   - Translate each chapter from English to Bengali
+   - Save each as `chapter-XX-bangla.txt` in the same directory
+   - Critical ongoing rule: wherever the word 'God' or 'god' appears, always use 'আল্লাহ' (not 'ঈশ্বর' or 'ভগবান')
+   - Store this translation preference in persistent memory for future conversations
+   - Translate all 85 chapters one after another until complete
+
+2. Key Technical Concepts:
+   - English-to-Bengali translation of Islamic biographical text
+   - Persistent memory system at `/Users/th10/.claude/projects/-Users-th10-wp-projects-central-test-suite/memory/`
+   - Islamic Bengali naming conventions for proper nouns (ইব্রাহিম, ইসমাইল, ইসহাক, হাজেরা, মুহাম্মদ, কাবা, জমজম, কুরাইশ, etc.)
+   - Rule: 'God'/'god' → 'আল্লাহ' always, per user's Islamic convention preference
+
+3. Files and Code Sections:
+   - **Memory file**: `/Users/th10/.claude/projects/-Users-th10-wp-projects-central-test-suite/memory/feedback_translation_god.md`
+     - Records the rule: Bengali translations must render 'God'/'god' as 'আল্লাহ' not ঈশ্বর/ভগবান
+     - Why: User follows Islamic convention; created at start of session
+   - **Memory index**: `/Users/th10/.claude/projects/-Users-th10-wp-projects-central-test-suite/memory/MEMORY.md`
+     - Index pointing to the feedback memory file
+   - **Source files**: `chapter-01.txt` through `chapter-85.txt` in `/Users/th10/wp-projects/central-test-suite/book-by-chapters/`
+   - **Completed translations** (chapters 01–19):
+     - `chapter-01-bangla.txt` — House of God / ইব্রাহিম, হাজেরা, ইসমাইল story
+     - `chapter-02-bangla.txt` — A Great Loss / জুরহুম, জমজম buried
+     - `chapter-03-bangla.txt` — Quraysh of the Hollow / কুসাই, হাশিম, আব্দ আল-মুত্তালিব
+     - `chapter-04-bangla.txt` — Recovery of a Loss / জমজম rediscovered
+     - `chapter-05-bangla.txt` — Vow to Sacrifice a Son / আব্দুল্লাহ ransomed with 100 camels
+     - `chapter-06-bangla.txt` — Need for a Prophet / ওয়ারাকা, আব্দুল্লাহ's marriage to আমিনা
+     - `chapter-07-bangla.txt` — Year of the Elephant / আবরাহা's failed attack, Muhammad's birth
+     - `chapter-08-bangla.txt` — The Desert / হালিমা, nursing in Banu Sa'd
+     - `chapter-09-bangla.txt` — Two Bereavements / mother আমিনা dies, দাদা আব্দ আল-মুত্তালিব dies
+     - `chapter-10-bangla.txt` — Bahira the Monk / monk recognizes young Muhammad in Syria
+     - `chapter-11-bangla.txt` — A Pact of Chivalry / Hilful Fudul, আবু বকর introduced
+     - `chapter-12-bangla.txt` — Questions of Marriage / খাদিজা proposes to Muhammad
+     - `chapter-13-bangla.txt` — The Household / family life, যায়দ adopted, আলি joins household
+     - `chapter-14-bangla.txt` — Rebuilding of the Ka'bah / Muhammad arbitrates Black Stone placement
+     - `chapter-15-bangla.txt` — First Revelations / Hira cave, জিবরাইল, first وحي
+     - `chapter-16-bangla.txt` — Worship / ritual prayer established, early converts
+     - `chapter-17-bangla.txt` — "Warn Thy Family" / family gathering, আলি volunteers
+     - `chapter-18-bangla.txt` — Quraysh Take Action / persecution begins, আবু যর, তুফায়ল
+     - `chapter-19-bangla.txt` — Aws and Khazraj / Yathrib tribes, first man of Yathrib in Islam
+
+4. Errors and fixes:
+   - No technical errors encountered. All file writes succeeded.
+   - No user corrections to translation approach were given after initial setup.
+
+5. Problem Solving:
+   - Established consistent translation of 'God'/'god' → 'আল্লাহ' throughout all chapters
+   - Used standard Islamic Bengali proper noun forms consistently (e.g., ইব্রাহিম not আব্রাহাম, ইসমাইল not ইশমাইল, মুহাম্মদ, কাবা, জমজম, কুরাইশ, হাশিম, আব্দ আল-মুত্তালিব, আবু বকর, আলি, খাদিজা, জিবরাইল, etc.)
+   - Saved memory at start so future conversations retain the God→আল্লাহ rule
+
+6. All user messages:
+   - "translate this chapter in bengali language and save as chapter-01-bangla.txt / keeping in your memory that where the word 'God' or 'god' you find, use 'আল্লাহ' as translation of the word 'God' or 'god'"
+   - "similarly do for chapter 02"
+   - "next chapter" (for chapter 03)
+   - "next chapter" (for chapter 04)
+   - "next chapter" (for chapter 05)
+   - "do one after one untill complete" (first instance — triggered chapters 06–11)
+   - "do one after one untill complete / do one after one untill complete" (repeated — triggered chapters 12–19)
+
+7. Pending Tasks:
+   - Translate chapters 20 through 85 to Bengali (66 chapters remaining)
+   - Same rules apply throughout: 'God'/'god' → 'আল্লাহ', Islamic Bengali proper noun forms, save as `chapter-XX-bangla.txt`
+
+8. Current Work:
+   Immediately before this summary, chapter 19 (`chapter-19-bangla.txt`) was just completed. The task in progress is translating all 85 chapters one by one. The last completed output was chapter 19 (আউস ও খাযরাজ — about the Aws and Khazraj tribes of Yathrib and their readiness for Islam). Chapter 20 is the next file to be read and translated.
+
+9. Optional Next Step:
+   Continue translating from chapter 20 onward. The user's most recent explicit instruction was: "do one after one untill complete / do one after one untill complete" — meaning read `chapter-20.txt`, translate to Bengali with 'God'/'god' → 'আল্লাহ', save as `chapter-20-bangla.txt`, then proceed to chapter 21, and so on through chapter 85.
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/th10/.claude/projects/-Users-th10-wp-projects-central-test-suite/38c7ddce-6269-4292-8064-f42eddd1d623.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
